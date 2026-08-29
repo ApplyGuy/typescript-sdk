@@ -1,0 +1,60 @@
+{
+  "name": "@applyguy/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for searching jobs and submitting applications with the Apply Guy Developer API.",
+  "keywords": [
+    "applyguy",
+    "jobs",
+    "job-search",
+    "job-applications",
+    "api",
+    "sdk",
+    "typescript"
+  ],
+  "homepage": "https://applyguy.ai/developers/docs",
+  "bugs": {
+    "url": "https://github.com/ApplyGuy/typescript-sdk/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ApplyGuy/typescript-sdk.git"
+  },
+  "license": "MIT",
+  "author": "Apply Guy",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test:types": "tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM,DOM.Iterable test/types.test.ts",
+    "test": "npm run build && node --test",
+    "check": "npm run typecheck && npm run test:types && npm test",
+    "prepack": "npm run build",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
