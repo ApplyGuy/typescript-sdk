@@ -26,6 +26,75 @@ Before the first npm release, install directly from GitHub:
 npm install github:ApplyGuy/typescript-sdk
 ~~~
 
+## Agent-first CLI
+
+The package also installs an `applyguy` executable. It is designed for coding
+agents and unattended workflows: every success is one JSON document on stdout,
+every failure is one JSON document on stderr, and it never prompts or emits
+terminal colors.
+
+Install it globally from GitHub today:
+
+~~~bash
+npm install --global github:ApplyGuy/typescript-sdk
+export APPLYGUY_API_KEY="your_api_key"
+
+applyguy jobs search --q "software engineer" --remote remote --limit 25
+applyguy credits balance
+~~~
+
+After the npm release, the install command is `npm install --global
+@applyguy/sdk`.
+
+Metered commands return their exact credit usage in `meta.creditUsage`. Job
+search and job detail are metered; application preflight is free. Creating an
+application submits to a real employer, so agents should preflight first and
+must provide an explicit idempotency key:
+
+~~~bash
+applyguy applications preflight --job-id JOB_ID --mode agent
+
+applyguy applications create \
+  --job-id JOB_ID \
+  --mode agent \
+  --idempotency-key "workflow-123:JOB_ID" \
+  --wait
+~~~
+
+`--wait` exits when the application succeeds, fails, is cancelled, or needs an
+answer from your agent. In agent mode, retrieve the exact request and return a
+JSON payload through stdin:
+
+~~~bash
+applyguy applications answer-request APPLICATION_ID
+applyguy applications answer APPLICATION_ID --input - < answer.json
+applyguy applications wait APPLICATION_ID --require-success
+~~~
+
+Complex and sensitive request bodies use `--input <file|->`. Secrets are read
+only from environment variables or files, never command-line arguments:
+
+- `APPLYGUY_API_KEY` or `APPLYGUY_API_KEY_FILE`
+- `APPLYGUY_ACCESS_TOKEN` or `APPLYGUY_ACCESS_TOKEN_FILE`
+- `APPLYGUY_REFRESH_TOKEN` or `APPLYGUY_REFRESH_TOKEN_FILE`
+
+Run `applyguy --help` for the complete command surface. Stable exit codes make
+failures straightforward for agents to classify:
+
+| Exit | Meaning |
+| ---: | --- |
+| 0 | Success, including a non-success application status unless `--require-success` is set |
+| 2 | Invalid command or input |
+| 3 | Authentication or credential error |
+| 4 | Resource not found |
+| 5 | Conflict or application/business failure |
+| 6 | Insufficient credits |
+| 7 | Rate limited |
+| 8 | API service or network failure |
+| 9 | Wait timed out; the remote application was not cancelled |
+| 10 | Unexpected local error |
+| 130 | Interrupted; the remote application was not cancelled |
+
 ## Quick start
 
 ~~~ts
