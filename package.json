@@ -1,6 +1,6 @@
 {
   "name": "@applyguy/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Official TypeScript SDK for searching jobs and submitting applications with the Apply Guy Developer API.",
   "keywords": [
     "applyguy",

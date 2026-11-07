@@ -17,14 +17,30 @@ This is an ESM package and uses the native Fetch, Blob, and FormData APIs.
 ## Install
 
 ~~~bash
-npm install @applyguy/sdk
+npm install github:ApplyGuy/typescript-sdk#v0.2.0
 ~~~
 
-Before the first npm release, install directly from GitHub:
+## Platforms with multiple candidates
 
-~~~bash
-npm install github:ApplyGuy/typescript-sdk
-~~~
+Use a single API key and credit balance for your platform. Each candidate has a stable ID and their own profile, preferences, files and mailbox. Existing integrations can continue using the account profile without a candidate ID.
+
+```ts
+const { data: candidate } = await client.candidates.create({
+  externalId: user.id, candidateContext: user.reviewedProfile,
+});
+const { data: resume } = await client.candidates.uploadDocument(candidate.id, "resume", resumePdf, "resume.pdf");
+await client.candidates.update(candidate.id, { defaultResumeId: resume.id });
+const { data: letter } = await client.candidates.uploadDocument(candidate.id, "cover_letter", letterPdf, "cover-letter.pdf");
+const input = { candidateId: candidate.id, jobId, resumeId: resume.id, coverLetterId: letter.id, mode: "agent" as const };
+const { data: check } = await client.applications.preflight(input);
+if (check.ready) await client.applications.create(input, savedApplicationIntentKey);
+```
+
+Upload PDF, DOC or DOCX up to 5 MB. Store the returned IDs. Omit `resumeId` to use the candidate's default. Switching defaults and editing a profile affect future applications. A queued application keeps its original profile and files throughout screening and retries. Cover-letter files are supported for Ashby, BambooHR, Paylocity, Rippling and Workable when the form has a cover-letter upload. Other ATS integrations return `cover_letter_unsupported` if you supply one.
+
+For inbox verification, call `client.candidates.connectEmail(candidate.id, { gmailUser, gmailAppPassword })` with the candidate's own Gmail or Google Workspace mailbox. Changing their email disconnects that mailbox. Workday requires a connected inbox. Greenhouse may request verification during submission. Check preflight and the final application’s `outcomeCode` for `email_integration_required` or `email_verification_failed`.
+
+Use `client.applications.list({ candidateId })` or signed webhook events to track each candidate. Agent-mode answer requests and credit reservations use the same API as single-profile applications. Reusing an idempotency key with a different candidate or document override returns a conflict. Archiving a candidate closes it to new applications and preserves its application history.
 
 ## Agent-first CLI
 

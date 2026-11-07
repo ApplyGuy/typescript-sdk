@@ -5,6 +5,21 @@ import { ApplyGuy, ApplyGuyApiError } from "../dist/index.js";
 
 const originalFetch = globalThis.fetch;
 
+test("uploads candidate documents and sends only their IDs on application creation", async () => {
+  const client = new ApplyGuy({ apiKey: "ag_live_test", baseUrl: "https://example.test" });
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    assert.equal(init.redirect, "error");
+    calls.push([url, init]);
+    return new Response(JSON.stringify({ data: { id: "doc-a" } }), { status: 201 });
+  };
+  const { data: doc } = await client.candidates.uploadDocument("candidate-a", "resume", new Blob(["test"]), "tailored.pdf");
+  await client.applications.create({ jobId: "job-a", candidateId: "candidate-a", resumeId: doc.id }, "stable-intent");
+  assert.equal(calls[0][0], "https://example.test/v1/candidates/candidate-a/documents");
+  assert.equal(calls[0][1].body.get("file").type, "application/pdf");
+  assert.deepEqual(JSON.parse(calls[1][1].body), { jobId: "job-a", candidateId: "candidate-a", resumeId: "doc-a" });
+});
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
@@ -21,6 +36,7 @@ test("keeps credentials out of enumerable client state", () => {
   assert.equal(serialized.includes("access_secret"), false);
   assert.deepEqual(Object.keys(client), [
     "jobs",
+    "candidates",
     "profile",
     "credits",
     "applications",

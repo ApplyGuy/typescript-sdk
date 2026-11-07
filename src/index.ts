@@ -151,7 +151,23 @@ export interface JobSearchQuery {
   cursor?: number;
 }
 
+export interface ManagedCandidate {
+  id: string;
+  externalId: string | null;
+  candidateContext: CandidateContext;
+  defaultResumeId: string | null;
+}
+export interface CandidateDocument {
+  id: string;
+  candidateId: string;
+  kind: "resume" | "cover_letter";
+  filename: string;
+}
+
 interface ApplicationOptions {
+  candidateId?: string;
+  resumeId?: string;
+  coverLetterId?: string;
   ats?: string;
   mode?: ApplicationMode;
 }
@@ -170,6 +186,9 @@ export interface AnswerRequest {
 }
 
 export interface Application {
+  candidateId: string | null;
+  resumeId: string | null;
+  coverLetterId: string | null;
   id: string;
   jobUrl: string;
   ats: string | null;
@@ -485,6 +504,14 @@ function parseCreditUsage(headers: Headers): CreditUsage | null {
   return { cost, balance, costMilli, balanceMilli };
 }
 
+function queryString(values: object) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  return params.size ? `?${params}` : "";
+}
+
 function json(body: unknown): Pick<RequestInit, "headers" | "body"> {
   return { headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
@@ -512,7 +539,7 @@ export class ApplyGuy {
     options: { baseUrl?: string } = {},
   ): Promise<BootstrapResult> {
     const response = await fetch(`${baseUrl(options.baseUrl)}/developer/bootstrap`, {
-      method: "POST",
+      method: "POST", redirect: "error",
       ...json(input),
     });
     return parseResponse<BootstrapResult>(response);
@@ -520,7 +547,7 @@ export class ApplyGuy {
 
   static async refresh(refreshToken: string, options: { baseUrl?: string } = {}): Promise<{ accessToken: string; refreshToken: string }> {
     const response = await fetch(`${baseUrl(options.baseUrl)}/auth/refresh`, {
-      method: "POST",
+      method: "POST", redirect: "error",
       ...json({ refreshToken }),
     });
     return parseResponse(response);
@@ -531,7 +558,7 @@ export class ApplyGuy {
     options: { baseUrl?: string } = {},
   ): Promise<{ data: UsageReport }> {
     const response = await fetch(`${baseUrl(options.baseUrl)}/v1/usage/share-links/exchange`, {
-      method: "POST",
+      method: "POST", redirect: "error",
       ...json({ token }),
     });
     return parseResponse(response);
@@ -544,29 +571,43 @@ export class ApplyGuy {
       if (!this.#accessToken) throw new ApplyGuyApiError(401, "access_token_required", "This operation requires the bootstrap access token.");
       headers.set("authorization", `Bearer ${this.#accessToken}`);
     }
-    const response = await fetch(`${this.#apiBaseUrl}${path}`, { ...init, headers });
+    const response = await fetch(`${this.#apiBaseUrl}${path}`, { ...init, headers, redirect: "error" });
     return parseResponse<T>(response);
   }
 
   private async meteredRequest<T extends object>(path: string, init: RequestInit = {}): Promise<MeteredResult<T>> {
     const headers = new Headers(init.headers);
     headers.set("authorization", `Bearer ${this.#apiKey}`);
-    const response = await fetch(`${this.#apiBaseUrl}${path}`, { ...init, headers });
+    const response = await fetch(`${this.#apiBaseUrl}${path}`, { ...init, headers, redirect: "error" });
     const result = await parseResponse<T>(response);
     return Object.assign(result, { creditUsage: parseCreditUsage(response.headers) });
   }
 
   jobs = {
-    search: (query: JobSearchQuery = {}) => {
-      const params = new URLSearchParams(
-        Object.entries(query)
-          .filter((entry): entry is [string, string | number] => entry[1] !== undefined)
-          .map(([key, value]) => [key, String(value)]),
-      );
-      const suffix = params.size ? `?${params}` : "";
-      return this.meteredRequest<{ data: Job[]; nextCursor: string | null }>(`/v1/jobs${suffix}`);
-    },
+    search: (query: JobSearchQuery = {}) =>
+      this.meteredRequest<{ data: Job[]; nextCursor: string | null }>(`/v1/jobs${queryString(query)}`),
     get: (id: string) => this.meteredRequest<{ data: Job }>(`/v1/jobs/${encodeURIComponent(id)}`),
+  };
+
+  candidates = {
+    create: (input: { externalId?: string; candidateContext: CandidateContext & { email: string } }) =>
+      this.request<{ data: ManagedCandidate }>("/v1/candidates", { method: "POST", ...json(input) }),
+    get: (id: string) => this.request<{ data: ManagedCandidate & { emailIntegrationConnected: boolean } }>(`/v1/candidates/${encodeURIComponent(id)}`),
+    list: (options: { after?: string; limit?: number; externalId?: string } = {}) =>
+      this.request<{ data: ManagedCandidate[]; nextCursor: string | null }>(`/v1/candidates${queryString(options)}`),
+    update: (id: string, input: { candidateContext?: CandidateContext; defaultResumeId?: string | null }) =>
+      this.request<void>(`/v1/candidates/${encodeURIComponent(id)}`, { method: "PATCH", ...json(input) }),
+    archive: (id: string) => this.request<void>(`/v1/candidates/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    uploadDocument: (id: string, kind: CandidateDocument["kind"], file: Blob, filename: string) => {
+      const body = new FormData();
+      body.set("kind", kind);
+      body.set("file", file.type ? file : new Blob([file], { type: mimeForFilename(filename) }), filename);
+      return this.request<{ data: CandidateDocument }>(`/v1/candidates/${encodeURIComponent(id)}/documents`, { method: "POST", body });
+    },
+    connectEmail: (id: string, input: { gmailUser: string; gmailAppPassword: string }) =>
+      this.request<void>(`/v1/candidates/${encodeURIComponent(id)}/email-integration`, { method: "PUT", ...json(input) }),
+    disconnectEmail: (id: string) =>
+      this.request<void>(`/v1/candidates/${encodeURIComponent(id)}/email-integration`, { method: "DELETE" }),
   };
 
   profile = {
@@ -594,12 +635,12 @@ export class ApplyGuy {
 
   applications = {
     preflight: (input: ApplicationInput) => this.request<{ data: ApplicationPreflight }>("/v1/applications/preflight", { method: "POST", ...json(input) }),
-    create: (input: ApplicationInput, idempotencyKey: string) => this.request<{ data: { id: string; status: ApplicationStatus; created: boolean } }>("/v1/applications", {
+    create: (input: ApplicationInput, idempotencyKey: string) => this.request<{ data: { id: string; status: ApplicationStatus; created: boolean; candidateId: string | null } }>("/v1/applications", {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
       body: JSON.stringify(input),
     }),
-    list: () => this.request<{ data: Application[] }>("/v1/applications"),
+    list: (options: { candidateId?: string } = {}) => this.request<{ data: Application[] }>(`/v1/applications${queryString(options)}`),
     get: (id: string) => this.request<{ data: Application }>(`/v1/applications/${encodeURIComponent(id)}`),
     answerRequest: (id: string) => this.request<{ data: AnswerRequest }>(`/v1/applications/${encodeURIComponent(id)}/answer-request`),
     answer: (id: string, input: { requestId: string; fingerprint: string; answer: unknown }) => this.request<{ data: { id: string; status: "queued" } }>(`/v1/applications/${encodeURIComponent(id)}/answers`, {
