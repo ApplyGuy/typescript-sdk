@@ -17,7 +17,7 @@ This is an ESM package and uses the native Fetch, Blob, and FormData APIs.
 ## Install
 
 ~~~bash
-npm install github:ApplyGuy/typescript-sdk#v0.2.0
+npm install @applyguy/sdk
 ~~~
 
 ## Platforms with multiple candidates
@@ -49,18 +49,15 @@ agents and unattended workflows: every success is one JSON document on stdout,
 every failure is one JSON document on stderr, and it never prompts or emits
 terminal colors.
 
-Install it globally from GitHub today:
+To install the CLI globally and search for jobs:
 
 ~~~bash
-npm install --global github:ApplyGuy/typescript-sdk
+npm install --global @applyguy/sdk
 export APPLYGUY_API_KEY="your_api_key"
 
 applyguy jobs search --q "software engineer" --remote remote --limit 25
 applyguy credits balance
 ~~~
-
-After the npm release, the install command is `npm install --global
-@applyguy/sdk`.
 
 Metered commands return their exact credit usage in `meta.creditUsage`. Job
 search and job detail are metered; application preflight is free. Creating an
