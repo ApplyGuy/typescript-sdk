@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -57,7 +58,8 @@ test("prints help and package version", async () => {
 
   const version = await runCli(["--version"]);
   assert.equal(version.code, 0);
-  assert.equal(version.stdout.trim(), "0.1.0");
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(version.stdout.trim(), manifest.version);
 });
 
 test("keeps secrets out of command-line options", async () => {
